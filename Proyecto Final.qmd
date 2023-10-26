@@ -1,0 +1,508 @@
+---
+title: "Proyecto Final Estadística"
+format: html
+editor: visual
+---
+
+## Importación de paquetes
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(httr)
+library(readr)
+```
+
+## Descarga automática de la base de datos
+
+```{r}
+url <- "https://raw.githubusercontent.com/mariabgutierrezz/CA0303_Proyecto_Final/423567984303fda74cb19af39832c9577c076f9d/Breast_Cancer.csv"
+datos <- read_csv(url,show_col_types = FALSE)
+head(datos)
+```
+
+## Depuración de la base de datos
+
+Se eliminan los valores NA
+
+```{r}
+datos <- na.omit(datos)
+```
+
+Se eliminan columnas de variables que no son parte del estudio
+
+```{r}
+columns_to_drop <- c(3, 4, 5, 6,7, 9, 11, 12,13,14)
+datos <- datos[, -columns_to_drop]
+```
+
+Se modifica el nombre de las observaciones de la variable Grade
+
+```{r}
+
+datos$Grade <- ifelse(datos$Grade == "anaplastic; Grade IV", 4, datos$Grade)
+datos$Grade <- as.numeric(datos$Grade)
+
+```
+
+Se modifica el nombre de las observaciones de la variable raza
+
+```{r}
+datos <- datos %>%
+  mutate(Race = case_when(
+    Race == "Other" ~ "Otras",
+    Race == "Black" ~ "Negra",
+    Race == "White" ~ "Blanca",
+    TRUE ~ as.character(Race)
+  ))
+```
+
+Se crea una nueva columna con valores numéricos para identificar el estado de la paciente, 1 representa el estado vivo y 0 el estado muerto
+
+```{r}
+datos$Status_Code <- ifelse(datos$Status == "Alive", 1, 0)
+```
+
+Se pasan los nombres de las columnas a español
+
+```{r}
+nuevos_nombres <- c("Edad", "Raza", "Grado", "Tamaño_Tumor", "Meses_Sobrevivencia", "Estado","Cod_Estado")
+colnames(datos)<- nuevos_nombres
+```
+
+Se agrega una columna para identificar el grado con número romano
+
+```{r}
+datos <- datos %>%
+  mutate(
+    Cod_grado = case_when(
+      Grado == 1 ~ "I",
+      Grado == 2 ~ "II",
+      Grado == 3 ~ "III",
+      Grado == 4 ~ "IV",
+      TRUE ~ as.character(Grado)
+    )
+  )
+view(datos)
+```
+
+# Análisis Descriptivo
+
+Cantidad de observaciones por raza
+
+```{r}
+(count_black <- sum(grepl("Negra", datos$Raza, ignore.case = TRUE)))
+
+
+(count_white <- sum(grepl("Blanca", datos$Raza, ignore.case = TRUE)))
+
+(count_other <- sum(grepl("Otras", datos$Raza, ignore.case = TRUE)))
+```
+
+Rango y promedio de edades de diagnóstico en estudio
+
+```{r}
+(youngest_age <- min(datos$Edad))
+(oldest_age <- max(datos$Edad))
+(mean_age<- mean(datos$Edad))
+```
+
+Se agrupan los datos por grupos de edad de 10 años
+
+```{r}
+edades_breaks <- c(30, 40, 50, 60, 70)
+edades_labels <- c("30-39", "40-49", "50-59", "60-69")
+datos$grupo_edades <- cut(datos$Edad, breaks = edades_breaks, labels = edades_labels, right = FALSE)
+df_30_39 <- datos[datos$grupo_edades == "30-39", ]
+df_40_49 <- datos[datos$grupo_edades == "40-49", ]
+df_50_59 <- datos[datos$grupo_edades == "50-59", ]
+df_60_69 <- datos[datos$grupo_edades == "60-69", ]
+```
+
+## Tamaño del Tumor
+
+Tabla de estadísticos por grupo de edad y raza
+
+```{r}
+tabla1 <- datos %>%
+    group_by(grupo_edades, Raza ) %>%
+    summarise(Min = min(Tamaño_Tumor),
+              Max = max(Tamaño_Tumor),
+              Media = mean(Tamaño_Tumor),
+              Sd = sd(Tamaño_Tumor),
+              .groups = "drop")
+print(tabla1)
+view(tabla1)
+
+```
+
+Histogramas que muestran la distribución del tamaño del tumor por raza
+
+```{r}
+g1 <- ggplot(datos, aes(x = Tamaño_Tumor, fill = Raza)) +
+    geom_histogram(binwidth = 5, position = "identity", alpha = 0.7) +
+    labs(
+         x = "Tamaño del Tumor (mm)",
+         y = "Frecuencia") +
+    theme_minimal() +
+    scale_fill_manual(values =  c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45"))+
+    facet_wrap(~Raza, scales = "free_y") 
+print(g1)
+ggsave(filename = "g_tumor.pdf", plot = g1, width = 6, height = 4, path="/Users/mariabolanosgutierrez/Downloads")
+```
+
+## Grado
+
+Tabla que presenta como se distribuyen los diagnosticos por grado en cada raza
+
+```{r}
+data_grado <- datos %>%
+    group_by(Raza, Grado) %>%
+    count()
+tabla2<- data_grado %>%
+    group_by(Raza) %>%
+    mutate(Porcentaje = n / sum(n) * 100)
+print(tabla2)
+```
+
+NOTA: las otras razas no tienen observaciones de grado 4.
+
+Gráfico que muestra la distribución del grado por edad y raza
+
+```{r}
+g2 <- ggplot(datos, aes(x = factor(Cod_grado), y = Edad, color = Raza)) +
+    geom_point() +
+    labs(
+        x = "Grado",
+        y = "Edad") +
+    theme_minimal() + 
+    scale_color_manual(values =  c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")) +
+    facet_wrap(~Raza) 
+print(g2)
+ggsave(filename = "g_Grado.pdf", plot = g2, width = 6, height = 4,path="/Users/mariabolanosgutierrez/Downloads")
+```
+
+## Estado y Edad de diagnóstico
+
+Tabla que muestra la cantidad de diagnósticos y el porcentaje de sobrevivientes
+
+```{r}
+tabla3 <- datos %>%
+    group_by(grupo_edades, Raza) %>%
+    summarize(Diagnosticos = n(),
+              Sobrevivientes = sum(Estado == "Alive") / n() *100,
+              .groups = "drop")
+print(tabla3)
+```
+
+## Meses de Sobrevivencia
+
+Tabla de estadísticos por grupo de edad y raza
+
+```{r}
+tabla4 <- datos %>%
+    group_by(grupo_edades,Raza) %>%
+    summarise(Min = min(Meses_Sobrevivencia),
+              Max = max(Meses_Sobrevivencia),
+              Media = mean(Meses_Sobrevivencia),
+              Sd = sd(Meses_Sobrevivencia),
+              .groups = "drop")
+print(tabla4)
+view(tabla4)
+```
+
+Gráfico de Barras que presenta el Promedio de Meses de Sobrevivencia por Grado y Raza
+
+```{r}
+g3<- ggplot(datos, aes(x = Cod_grado, y = Meses_Sobrevivencia, fill = Raza)) +
+    geom_bar(stat = "summary", fun = "mean", position = "dodge") +
+    labs(x = "Grado",
+         y = "Meses de Sobrevivencia") +
+    theme_minimal() +
+    scale_fill_manual(values =  c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45"))
+print(g3)
+ggsave(filename = "g_MesesSobrevivencia.pdf", plot = g3, width = 6, height = 4,path="/Users/mariabolanosgutierrez/Downloads")
+```
+
+# Metodología
+
+Se separa la base de datos en tres bases
+
+```{r}
+datos_Negra <- datos %>%
+    filter(Raza == "Negra")
+datos_Blanca <- datos %>%
+    filter(Raza == "Blanca")
+datos_Otra <- datos %>%
+    filter(Raza == "Otras")
+```
+
+Se separan los datos por factor pronóstico
+
+```{r}
+datos_Edad_N<-datos_Negra$Edad
+datos_Edad_B<-datos_Blanca$Edad
+datos_Edad_O<-datos_Otra$Edad
+
+datos_Grado_N<-datos_Negra$Grado
+datos_Grado_B<-datos_Blanca$Grado
+datos_Grado_O<-datos_Otra$Grado
+
+datos_Tumor_N<-datos_Negra$Tamaño_Tumor
+datos_Tumor_B<-datos_Blanca$Tamaño_Tumor
+datos_Tumor_O<-datos_Otra$Tamaño_Tumor
+
+datos_meses_N<-datos_Negra$Meses_Sobrevivencia
+datos_meses_B<-datos_Blanca$Meses_Sobrevivencia
+datos_meses_O<-datos_Otra$Meses_Sobrevivencia
+
+datos_Estado_N<-datos_Negra$Cod_Estado
+datos_Estado_B<-datos_Blanca$Cod_Estado
+datos_Estado_O<-datos_Otra$Cod_Estado
+```
+
+## Prueba KS
+
+Edad de diagnóstico
+
+```{r}
+(pruebaKS_EdadBN<-ks.test(datos_Edad_N, datos_Edad_B))
+(pruebaKS_EdadON<-ks.test(datos_Edad_N, datos_Edad_O))
+(pruebaKS_EdadBO<-ks.test(datos_Edad_O, datos_Edad_B))
+```
+
+Tamaño del tumor
+
+```{r}
+(pruebaKS_TumorBN<- ks.test(datos_Tumor_N,datos_Tumor_B))
+(pruebaKS_TumorON<- ks.test(datos_Tumor_N,datos_Tumor_O))
+(pruebaKS_TumorBO<- ks.test(datos_Tumor_O,datos_Tumor_B))
+  
+```
+
+Grado del Tumor
+
+```{r}
+(pruebaKS_GradoBN <- ks.test(datos_Grado_N, datos_Grado_B))
+(pruebaKS_GradoON <- ks.test(datos_Grado_N, datos_Grado_O))
+(pruebaKS_GradoBO <- ks.test(datos_Grado_O, datos_Grado_B))
+
+```
+
+Estado (Vivo o Muerto)
+
+```{r}
+(pruebaKS_EstadoBN<- ks.test(datos_Estado_N,datos_Estado_B))
+(pruebaKS_EstadoON<- ks.test(datos_Estado_N,datos_Estado_O))
+(pruebaKS_EstadoBO<- ks.test(datos_Estado_O,datos_Estado_B))
+```
+
+Meses de Sobrevivencia
+
+```{r}
+(pruebaKS_SobrevivenciaBN<- ks.test(datos_meses_N,datos_meses_B))
+(pruebaKS_SobrevivenciaON<- ks.test(datos_meses_N,datos_meses_O))
+(pruebaKS_SobrevivenciaBO<- ks.test(datos_meses_O,datos_meses_B))
+```
+
+## Funciones de distribución
+
+Edad de diagnóstico
+
+```{r}
+ ecdf_EdadN <- ecdf(datos_Edad_N)
+  ecdf_EdadB <- ecdf(datos_Edad_B)
+  ecdf_EdadO <- ecdf(datos_Edad_O)
+  df <- data.frame(
+      Edad = seq(min(datos_Edad_N, datos_Edad_B, datos_Edad_O), 
+                 max(datos_Edad_N, datos_Edad_B, datos_Edad_O), length.out = 100)
+  )
+```
+
+```{r}
+g4<- ggplot(df, aes(x = Edad, color = "Raza")) +
+      stat_function(fun = ecdf_EdadN, aes(color = "Negra")) +
+      stat_function(fun = ecdf_EdadB, aes(color = "Blanca")) +
+      stat_function(fun = ecdf_EdadO, aes(color = "Otras")) +
+      scale_color_manual(values = c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")) +
+      labs(y= "F(x)",color = "Raza") +
+      theme_minimal() +
+      guides(color = guide_legend(title = "Raza")) +
+      theme(legend.position = "right")
+print(g4)
+ggsave(filename = "edcf_edad.pdf", plot = g4, width = 6, height = 4, path= "/Users/mariabolanosgutierrez/Downloads")
+```
+
+Tamaño del tumor
+
+```{r}
+ ecdf_TumorN <- ecdf(datos_Tumor_N)
+  ecdf_TumorB <- ecdf(datos_Tumor_B)
+  ecdf_TumorO <- ecdf(datos_Tumor_O)
+  df2<- data.frame(
+      Tamaño = seq(min(datos_Tumor_N, datos_Tumor_B, datos_Tumor_O), 
+                 max(datos_Tumor_N, datos_Tumor_B, datos_Tumor_O), length.out = 100)
+  )
+```
+
+```{r}
+g5<- ggplot(df2, aes(x = Tamaño, color = "Raza")) +
+      stat_function(fun = ecdf_TumorN, aes(color = "Negra")) +
+      stat_function(fun = ecdf_TumorB, aes(color = "Blanca")) +
+      stat_function(fun = ecdf_TumorO, aes(color = "Otras")) +
+     scale_color_manual(values = c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")) +
+      labs(x="Tamaño (mm)",y= "F(x)",color = "Raza") +
+      theme_minimal() +
+      guides(color = guide_legend(title = "Raza")) +
+      theme(legend.position = "right")
+print(g5)
+ggsave(filename = "edcf_tamano.pdf", plot = g5, width = 6, height = 4, path= "/Users/mariabolanosgutierrez/Downloads")
+```
+
+Grado del Tumor
+
+```{r}
+ ecdf_GradoN <- ecdf(datos_Grado_N)
+  ecdf_GradoB <- ecdf(datos_Grado_B)
+  ecdf_GradoO <- ecdf(datos_Grado_O)
+  df3 <- data.frame(datos$Grado.unique())
+```
+
+```{r}
+g6<- ggplot(df3, aes(x = Grado)) +
+  geom_step(aes(y = ECDF_Negra, color = "Negra"), size = 1) +
+  geom_step(aes(y = ECDF_Blanca, color = "Blanca"), size = 1) +
+  geom_step(aes(y = ECDF_Otras, color = "Otras"), size = 1) +
+  scale_color_manual(values = c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")) +
+  labs(y = "F(x)", color = "Raza", title = "ECDF de Grado por Raza") +
+  theme_minimal() +
+  guides(color = guide_legend(title = "Raza")) +
+  theme(legend.position = "right") +
+  theme(plot.title = element_text(hjust = 0.5))
+print(g6)
+ggsave(filename = "edcf_grado.pdf", plot = g6, width = 6, height = 4, path= "/Users/mariabolanosgutierrez/Downloads")
+```
+
+Estado
+
+```{r}
+ ecdf_EstadoN <- ecdf(datos_Estado_N)
+  ecdf_EstadoB <- ecdf(datos_Estado_B)
+  ecdf_EstadoO <- ecdf(datos_Estado_O)
+  df5 <- data.frame(Estado = c(0, 1))
+```
+
+```{r}
+g7<- ggplot(df5, aes(x = Estado, color = "Raza")) +
+      stat_function(fun = ecdf_EstadoN, aes(color = "Negra")) +
+      stat_function(fun = ecdf_EstadoB, aes(color = "Blanca")) +
+      stat_function(fun = ecdf_EstadoO, aes(color = "Otras")) +
+      scale_color_manual(values = c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")) +
+      labs(y= "F(x)",color = "Raza") +
+      theme_minimal() +
+      guides(color = guide_legend(title = "Raza")) +
+      theme(legend.position = "right")
+print(g7)
+ggsave(filename = "edcf_estado.pdf", plot = g7, width = 6, height = 4,  path= "/Users/mariabolanosgutierrez/Downloads")
+```
+
+Meses de Sobrevivencia
+
+```{r}
+ecdf_MesesN <- ecdf(datos_meses_N)
+  ecdf_MesesB <- ecdf(datos_meses_B)
+  ecdf_MesesO <- ecdf(datos_meses_O)
+  df4<- data.frame(
+      Meses = seq(min(datos_meses_N, datos_meses_B, datos_meses_O), 
+                 max(datos_meses_N, datos_meses_B, datos_meses_O), length.out = 100)
+  )
+```
+
+```{r}
+g8<- ggplot(df4, aes(x = Meses, color = "Raza")) +
+      stat_function(fun = ecdf_MesesN, aes(color = "Negra")) +
+      stat_function(fun = ecdf_MesesB, aes(color = "Blanca")) +
+      stat_function(fun = ecdf_MesesO, aes(color = "Otras")) +
+      scale_color_manual(values = c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")) +
+      labs(y= "F(x)",color = "Raza") +
+      theme_minimal() +
+      guides(color = guide_legend(title = "Raza")) +
+      theme(legend.position = "right")
+print(g8)
+ggsave(filename = "edcf_meses.pdf", plot = g8, width = 6, height = 4, path= "/Users/mariabolanosgutierrez/Downloads")
+```
+
+## Prueba Chi Cuadrado
+
+Para la aplicación de las siguientes dos pruebas, se necesita separar la base de datos completa de forma que se tenga una columna la raza y otra el factor pronóstico
+
+```{r}
+df_Raza_Edad<- table(datos$Raza, datos$Edad)
+df_Raza_Tumor<- table(datos$Raza, datos$Tamaño_Tumor)
+df_Raza_Grado<- table(datos$Raza, datos$Grado)
+df_Raza_Estado<- table(datos$Raza, datos$Estado)
+df_Raza_Meses<- table(datos$Raza, datos$Meses_Sobrevivencia)
+```
+
+Edad de diagnóstico
+
+```{r}
+(resultado_chi_Edad<-chisq.test(df_Raza_Edad))
+```
+
+Tamaño del tumor
+
+```{r}
+(resultado_chi_Tumor<-chisq.test(df_Raza_Tumor))
+```
+
+Grado del Tumor
+
+```{r}
+(resultado_chi_Grado<-chisq.test(df_Raza_Grado))
+```
+
+Estado
+
+```{r}
+(resultado_chi_Estado<-chisq.test(df_Raza_Estado))
+```
+
+Meses de sobrevivencia
+
+```{r}
+(resultado_chi_Meses<-chisq.test(df_Raza_Meses))
+```
+
+## Prueba Fisher
+
+Edad de diagnóstico
+
+```{r}
+(resultado_fisher_Edad<-fisher.test(df_Raza_Edad, simulate.p.value = TRUE))
+```
+
+Tamaño del Tumor
+
+```{r}
+(resultado_fisher_Tumor<-fisher.test(df_Raza_Tumor, simulate.p.value = TRUE))
+```
+
+Grado del Tumor
+
+```{r}
+(resultado_fisher_Grado<-fisher.test(df_Raza_Grado,, simulate.p.value = TRUE))
+```
+
+Estado
+
+```{r}
+(resultado_fisher_Estado<-fisher.test(df_Raza_Estado, simulate.p.value = TRUE))
+```
+
+Meses de Sobrevivencia
+
+```{r}
+(resultado_fisher_Meses<-fisher.test(df_Raza_Meses, simulate.p.value = TRUE))
+```
