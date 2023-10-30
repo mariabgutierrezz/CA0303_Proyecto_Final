@@ -149,7 +149,7 @@ g1 <- ggplot(datos, aes(x = Tamaño_Tumor, fill = Raza)) +
     scale_fill_manual(values =  c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45"))+
     facet_wrap(~Raza, scales = "free_y") 
 print(g1)
-ggsave(filename = "g_tumor.pdf", plot = g1, width = 6, height = 4, path="/Users/mariabolanosgutierrez/Downloads")
+#ggsave(filename = "g_tumor.pdf", plot = g1, width = 6, height = 4, path="/Users/mariabolanosgutierrez/Downloads")
 ```
 
 ## Grado
@@ -180,7 +180,7 @@ g2 <- ggplot(datos, aes(x = factor(Cod_grado), y = Edad, color = Raza)) +
     scale_color_manual(values =  c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")) +
     facet_wrap(~Raza) 
 print(g2)
-ggsave(filename = "g_Grado.pdf", plot = g2, width = 6, height = 4,path="/Users/mariabolanosgutierrez/Downloads")
+#ggsave(filename = "g_Grado.pdf", plot = g2, width = 6, height = 4,path="/Users/mariabolanosgutierrez/Downloads")
 ```
 
 ## Estado y Edad de diagnóstico
@@ -222,7 +222,7 @@ g3<- ggplot(datos, aes(x = Cod_grado, y = Meses_Sobrevivencia, fill = Raza)) +
     theme_minimal() +
     scale_fill_manual(values =  c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45"))
 print(g3)
-ggsave(filename = "g_MesesSobrevivencia.pdf", plot = g3, width = 6, height = 4,path="/Users/mariabolanosgutierrez/Downloads")
+#ggsave(filename = "g_MesesSobrevivencia.pdf", plot = g3, width = 6, height = 4,path="/Users/mariabolanosgutierrez/Downloads")
 ```
 
 # Metodología
@@ -331,7 +331,7 @@ g4<- ggplot(df, aes(x = Edad, color = "Raza")) +
       guides(color = guide_legend(title = "Raza")) +
       theme(legend.position = "right")
 print(g4)
-ggsave(filename = "edcf_edad.pdf", plot = g4, width = 6, height = 4, path= "/Users/mariabolanosgutierrez/Downloads")
+#ggsave(filename = "edcf_edad.pdf", plot = g4, width = 6, height = 4, path= "/Users/mariabolanosgutierrez/Downloads")
 ```
 
 Tamaño del tumor
@@ -357,7 +357,7 @@ g5<- ggplot(df2, aes(x = Tamaño, color = "Raza")) +
       guides(color = guide_legend(title = "Raza")) +
       theme(legend.position = "right")
 print(g5)
-ggsave(filename = "edcf_tamano.pdf", plot = g5, width = 6, height = 4, path= "/Users/mariabolanosgutierrez/Downloads")
+#ggsave(filename = "edcf_tamano.pdf", plot = g5, width = 6, height = 4, path= "/Users/mariabolanosgutierrez/Downloads")
 ```
 
 Grado del Tumor
@@ -381,7 +381,7 @@ g6<- ggplot(df3, aes(x = Grado)) +
   theme(legend.position = "right") +
   theme(plot.title = element_text(hjust = 0.5))
 print(g6)
-ggsave(filename = "edcf_grado.pdf", plot = g6, width = 6, height = 4, path= "/Users/mariabolanosgutierrez/Downloads")
+#ggsave(filename = "edcf_grado.pdf", plot = g6, width = 6, height = 4, path= "/Users/mariabolanosgutierrez/Downloads")
 ```
 
 Estado
@@ -430,7 +430,7 @@ g8<- ggplot(df4, aes(x = Meses, color = "Raza")) +
       guides(color = guide_legend(title = "Raza")) +
       theme(legend.position = "right")
 print(g8)
-ggsave(filename = "edcf_meses.pdf", plot = g8, width = 6, height = 4, path= "/Users/mariabolanosgutierrez/Downloads")
+#ggsave(filename = "edcf_meses.pdf", plot = g8, width = 6, height = 4, path= "/Users/mariabolanosgutierrez/Downloads")
 ```
 
 ## Prueba Chi Cuadrado
