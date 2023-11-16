@@ -1,0 +1,598 @@
+---
+title: "Proyecto Final Estadística"
+format: html
+editor: visual
+---
+
+## Importación de paquetes
+
+Observación: en caso de no tener instalado el paquete "gridExtra" ejecutar el siguiente chunk de código. En caso de tenerlo instalado, puede omitirlo y correr directamente el de las librerías.
+
+```{r}
+install.packages("gridExtra")
+```
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(httr)
+library(readr)
+library(gridExtra)
+```
+
+## Descarga automática de la base de datos
+
+```{r}
+url <- "https://raw.githubusercontent.com/mariabgutierrezz/CA0303_Proyecto_Final/423567984303fda74cb19af39832c9577c076f9d/Breast_Cancer.csv"
+datos <- read_csv(url,show_col_types = FALSE)
+head(datos)
+```
+
+## Limpieza y Transformación de la base de datos
+
+Se eliminan los valores NA
+
+```{r}
+datos <- na.omit(datos)
+```
+
+Se eliminan columnas de variables que no son parte del estudio
+
+```{r}
+columns_to_drop <- c(3, 5, 6,7, 9, 11, 12,13,14)
+datos <- datos[, -columns_to_drop]
+```
+
+Se modifican el nombre de las observaciones de la variable Grade
+
+```{r}
+datos$Grade <- ifelse(datos$Grade == "anaplastic; Grade IV", 4, datos$Grade)
+datos$Grade <- as.numeric(datos$Grade)
+```
+
+Se modifica el nombre de las observaciones de la variable raza
+
+```{r}
+datos <- datos %>%
+  mutate(Race = case_when(
+    Race == "Other" ~ "Otras",
+    Race == "Black" ~ "Negra",
+    Race == "White" ~ "Blanca",
+    TRUE ~ as.character(Race)
+  ))
+```
+
+Se crea una nueva columna con valores numéricos para identificar el estado de la paciente, 1 representa el estado vivo y 0 el estado muerto
+
+```{r}
+datos$Status_Code <- ifelse(datos$Status == "Alive", 1, 0)
+```
+
+Se pasan los nombres de las columnas a español
+
+```{r}
+nuevos_nombres <- c("Edad", "Raza","Etapa_Tumor", "Grado", "Tamaño_Tumor", "Meses_Sobrevivencia", "Estado","Cod_Estado")
+colnames(datos)<- nuevos_nombres
+```
+
+Se agrega una columna para identificar el grado con número romano
+
+```{r}
+datos <- datos %>%
+  mutate(
+    Cod_grado = case_when(
+      Grado == 1 ~ "I",
+      Grado == 2 ~ "II",
+      Grado == 3 ~ "III",
+      Grado == 4 ~ "IV",
+      TRUE ~ as.character(Grado)
+    )
+  )
+```
+
+Se crean grupos de edades de 10 años de diferencia, se agrega una nueva variable "grupo_edades" para identificar cada observación de la muestra según el grupo de edad al que pertenezca y se crean cuatro subconjuntos de datos, cada uno correspondiente a un grupo de edad específico.
+
+```{r}
+edades_breaks <- c(30, 40, 50, 60, 70)
+edades_labels <- c("30-39", "40-49", "50-59", "60-69")
+datos$grupo_edades <- cut(datos$Edad, breaks = edades_breaks, labels = edades_labels, right = FALSE)
+df_30_39 <- datos[datos$grupo_edades == "30-39", ]
+df_40_49 <- datos[datos$grupo_edades == "40-49", ]
+df_50_59 <- datos[datos$grupo_edades == "50-59", ]
+df_60_69 <- datos[datos$grupo_edades == "60-69", ]
+```
+
+Se generan categorías para agrupar la variable "Meses de Sobrevivencia" según la duración en años que ha sobrevivido o sobrevivió la paciente. Además, se agrega una nueva variable llamada "grupo_meses" para identificar cada observación de la muestra según la categoría de meses a la que pertenezca.
+
+```{r}
+meses_breaks <- c(1,12, 24, 36, 48, 60, 72, 84, 96, 108)
+meses_labels <- c("Menos de 1", "1", "2", "3", "4", "5", "6", "7","8 o más")  
+datos$grupo_meses <- cut(datos$Meses_Sobrevivencia, breaks = meses_breaks, labels = meses_labels, right = FALSE)
+```
+
+# Análisis Descriptivo
+
+Primeramente, se contabilizó la cantidad de observaciones por raza de la muestra en estudio. Las cuales se muestran en la siguiente tabla.
+
+```{r}
+count_black <- sum(grepl("Negra", datos$Raza, ignore.case = TRUE))
+
+
+count_white <- sum(grepl("Blanca", datos$Raza, ignore.case = TRUE))
+
+count_other <- sum(grepl("Otras", datos$Raza, ignore.case = TRUE))
+(conteos_por_raza <- data.frame(Raza = c("Negra", "Blanca", "Otras"),
+                               Cantidad = c(count_black, count_white, count_other)))
+
+```
+
+A partir de la información proporcionada en la tabla anterior, se evidencia un sesgo en la muestra, ya que la mayoría de las observaciones pertenecen a la categoría de raza blanca. Este hallazgo subraya la importancia de abordar la interpretación de los resultados subsiguientes con la máxima rigurosidad, considerando el impacto potencial del desequilibrio racial en la validez y representatividad de las conclusiones.
+
+Seguidamente, se realizó un análisis detallado por cada factor pronóstico en estudio. El cual se presenta a continuación.
+
+## Edad de diagnóstico
+
+Se determinaron los estadísticos para la variable edad del conjunto de datos, incluyendo los valores mínimo, máximo y promedio.
+
+```{r}
+(resultados_edad <- data.frame(
+  Estadísticos = c("Edad Mínima", "Edad Máxima", "Edad Promedio"),
+  Valor = round(c(min(datos$Edad), max(datos$Edad), mean(datos$Edad)), 0)
+)
+)
+
+```
+
+Y se llevó a cabo un recuento de la cantidad de observaciones, clasificadas según grupos de edad, lo cual resulta de gran utilidad para la implementación de pruebas de independencia que se realizarán posteriormente.
+
+```{r}
+datos_edad <- datos %>%
+  group_by(Raza, grupo_edades) %>%
+  count() %>%
+  spread(key = grupo_edades, value = n, fill = 0)
+(datos_edad <- datos_edad %>%
+  column_to_rownames(var = "Raza"))
+
+```
+
+## Estado
+
+Se realizó un recuento de los diagnósticos, clasificados por grupos de edad, así como la cantidad de individuos que sobrevivieron y fallecieron.
+
+```{r}
+(tabla3 <- datos %>%
+    group_by(grupo_edades, Raza) %>%
+    summarize(Diagnosticos = n(),
+              "Sobrevivientes(%) "= sum(Estado == "Alive") / n() *100,
+              "Fallecimientos(%)" = sum(Estado == "Dead") / n() *100,
+              .groups = "drop"))
+
+```
+
+Además, se llevó a cabo el conteo de la cantidad de observaciones para cada estado, clasificadas por raza.
+
+```{r}
+datos_estado <- datos %>%
+  group_by(Raza, Cod_Estado) %>%
+  count() %>%
+  spread(key = Cod_Estado, value = n, fill = 0)
+
+(datos_estado <- datos_estado %>%
+  column_to_rownames(var = "Raza"))
+```
+
+## Tamaño del Tumor
+
+En primer lugar, se calcularon los estadísticos de la variable, considerando tanto el grupo de edad como la raza. Esto abarcó los valores mínimo, máximo, promedio y desviación estándar (Sd).
+
+```{r}
+(tabla1 <- datos %>%
+    group_by(grupo_edades, Raza ) %>%
+    summarise(Min = min(Tamaño_Tumor),
+              Max = max(Tamaño_Tumor),
+              Media = mean(Tamaño_Tumor),
+              Sd = sd(Tamaño_Tumor),
+              .groups = "drop"))
+```
+
+Posteriormente, se procedió a realizar un recuento de las observaciones asociadas a la variable en cuestión. Este procedimiento involucró la clasificación de las diversas dimensiones en cuatro categorías: T1, T2, T3 y T4, las cuales representan las distintas etapas del tumor y se categorizan conforme a la variable "Etapa del tumor". Resulta fundamental destacar que la categoría T1 abarca tumores con dimensiones entre 1 mm y 20 mm, la T2 incluye aquellos con más de 20 mm y menos de 50 mm, la T3 engloba tumores con dimensiones superiores a 50 mm, y la T4 se asigna a tumores que han crecido significativamente, pudiendo haber invadido estructuras cercanas o tejidos.
+
+```{r}
+datos_tumor<- datos%>%
+  group_by(Raza, Etapa_Tumor) %>%
+  count() %>%
+  spread(key = Etapa_Tumor, value = n, fill = 0)
+
+(datos_tumor <- datos_tumor %>%
+  column_to_rownames(var = "Raza"))
+
+```
+
+```{r}
+datos_meses <- datos %>%
+  group_by(Raza, grupo_meses) %>%
+  count() %>%
+  spread(key = grupo_meses, value = n, fill = 0)
+
+# Modificación para hacer que "Raza" sea el índice
+datos_meses <- datos_meses %>%
+  column_to_rownames(var = "Raza")
+view(datos_meses)
+
+```
+
+Adicionalmente, se construyeron histogramas con el propósito de visualizar la distribución de la variable por raza, los cuales se presentan a continuación.
+
+```{r}
+(g1 <- ggplot(datos, aes(x = Tamaño_Tumor, fill = Raza)) +
+    geom_histogram(binwidth = 5, position = "identity", alpha = 0.7) +
+    labs(
+         x = "Tamaño del Tumor (mm)",
+         y = "Frecuencia") +
+    theme_minimal() +
+    scale_fill_manual(values =  c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45"))+
+    facet_wrap(~Raza, scales = "free_y"))
+```
+
+## Meses de Sobrevivencia
+
+Primeramente, se calcularon los estadísticos de la variable, considerando tanto el grupo de edad como la raza. Esto abarcó los valores mínimo, máximo, promedio y desviación estándar (Sd).
+
+```{r}
+(tabla4 <- datos %>%
+    group_by(grupo_edades,Raza) %>%
+    summarise(Min = min(Meses_Sobrevivencia),
+              Max = max(Meses_Sobrevivencia),
+              Media = mean(Meses_Sobrevivencia),
+              Sd = sd(Meses_Sobrevivencia),
+              .groups = "drop"))
+```
+
+Para complementar el análisis, se presenta un gráfico de barras que muestra el promedio de meses de sobrevivencia, desglosado por grado y raza.
+
+```{r}
+(g3<- ggplot(datos, aes(x = Cod_grado, y = Meses_Sobrevivencia, fill = Raza)) +
+    geom_bar(stat = "summary", fun = "mean", position = "dodge") +
+    labs(x = "Grado",
+         y = "Meses de Sobrevivencia") +
+    theme_minimal() +
+    scale_fill_manual(values =  c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")))
+```
+
+## Grado
+
+En primer lugar, se contabilizaron la cantidad de observaciones de la variable según la raza.
+
+```{r}
+datos_grado <- datos %>%
+    group_by(Raza, Grado) %>%
+    count()%>%
+  spread(key = Grado, value = n, fill = 0)
+
+(datos_grado <- datos_grado %>%
+  column_to_rownames(var = "Raza"))
+
+```
+
+Luego ,se procedió a analizar la distribución de los diagnósticos por grado en cada raza.
+
+```{r}
+(tabla2 <- datos %>%
+  group_by(Raza, Grado) %>%
+  summarise(n = n(), .groups = 'drop') %>%
+  mutate(Porcentaje = n / sum(n) * 100)%>%
+  select(Raza, Grado, Porcentaje)
+)
+```
+
+Cabe destacar que las otras razas no tienen observaciones de grado 4.
+
+Y por último, se presenta un gráfico que ilustra la distribución de la variable en función de la edad de diagnóstico y la raza.
+
+```{r}
+(g2 <- ggplot(datos, aes(x = factor(Cod_grado), y = Edad, color = Raza)) +
+    geom_point() +
+    labs(
+        x = "Grado",
+        y = "Edad") +
+    theme_minimal() + 
+    scale_color_manual(values =  c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")) +
+    facet_wrap(~Raza))
+```
+
+# Implementación de la Metodología
+
+Primeramente, se divide la base de datos en tres subconjuntos según la variable de raza.
+
+```{r}
+datos_Negra <- datos %>%
+    filter(Raza == "Negra")
+datos_Blanca <- datos %>%
+    filter(Raza == "Blanca")
+datos_Otra <- datos %>%
+    filter(Raza == "Otras")
+```
+
+Seguidamente, se prodece a separar esos subconjuntos de datos por factor pronóstico.
+
+```{r}
+datos_Edad_N<-datos_Negra$Edad
+datos_Edad_B<-datos_Blanca$Edad
+datos_Edad_O<-datos_Otra$Edad
+
+datos_Grado_N<-datos_Negra$Grado
+datos_Grado_B<-datos_Blanca$Grado
+datos_Grado_O<-datos_Otra$Grado
+
+datos_Tumor_N<-datos_Negra$Tamaño_Tumor
+datos_Tumor_B<-datos_Blanca$Tamaño_Tumor
+datos_Tumor_O<-datos_Otra$Tamaño_Tumor
+
+datos_meses_N<-datos_Negra$Meses_Sobrevivencia
+datos_meses_B<-datos_Blanca$Meses_Sobrevivencia
+datos_meses_O<-datos_Otra$Meses_Sobrevivencia
+
+datos_Estado_N<-datos_Negra$Cod_Estado
+datos_Estado_B<-datos_Blanca$Cod_Estado
+datos_Estado_O<-datos_Otra$Cod_Estado
+```
+
+A continuación, se presentan los resultados obtenidos de la prueba de Kolmogorov-Smirnov llevada a cabo para cada factor pronóstico. Es crucial destacar que la prueba se ejecutó tres veces por factor, dado que esta solo permite comparar dos distribuciones simultáneamente. La implementación de esta prueba tiene como objetivo abordar uno de los propósitos de la investigación: comparar las distribuciones de los factores pronósticos en estudio entre las diversas razas de mujeres diagnosticadas con cáncer de mama en Estados Unidos durante el periodo de estudio.
+
+## Prueba KS
+
+#### Edad de diagnóstico
+
+```{r}
+(pruebaKS_EdadBN<-ks.test(datos_Edad_N, datos_Edad_B))
+(pruebaKS_EdadON<-ks.test(datos_Edad_N, datos_Edad_O))
+(pruebaKS_EdadBO<-ks.test(datos_Edad_O, datos_Edad_B))
+```
+
+#### Estado 
+
+```{r}
+(pruebaKS_EstadoBN<- ks.test(datos_Estado_N,datos_Estado_B))
+(pruebaKS_EstadoON<- ks.test(datos_Estado_N,datos_Estado_O))
+(pruebaKS_EstadoBO<- ks.test(datos_Estado_O,datos_Estado_B))
+```
+
+#### Tamaño del tumor
+
+```{r}
+(pruebaKS_TumorBN<- ks.test(datos_Tumor_N,datos_Tumor_B))
+(pruebaKS_TumorON<- ks.test(datos_Tumor_N,datos_Tumor_O))
+(pruebaKS_TumorBO<- ks.test(datos_Tumor_O,datos_Tumor_B))
+  
+```
+
+#### Meses de Sobrevivencia
+
+```{r}
+(pruebaKS_SobrevivenciaBN<- ks.test(datos_meses_N,datos_meses_B))
+(pruebaKS_SobrevivenciaON<- ks.test(datos_meses_N,datos_meses_O))
+(pruebaKS_SobrevivenciaBO<- ks.test(datos_meses_O,datos_meses_B))
+```
+
+#### Grado del Tumor
+
+```{r}
+(pruebaKS_GradoBN <- ks.test(datos_Grado_N, datos_Grado_B))
+(pruebaKS_GradoON <- ks.test(datos_Grado_N, datos_Grado_O))
+(pruebaKS_GradoBO <- ks.test(datos_Grado_O, datos_Grado_B))
+
+```
+
+Con el objetivo de complementar el análisis de los resultados obtenido de la Prueba KS, se construyeron las funciones de distribución para cada factor, las cuales se presentan a continuación.
+
+## Funciones de distribución
+
+#### Edad de diagnóstico
+
+```{r}
+ ecdf_EdadN <- ecdf(datos_Edad_N)
+  ecdf_EdadB <- ecdf(datos_Edad_B)
+  ecdf_EdadO <- ecdf(datos_Edad_O)
+  df <- data.frame(
+      Edad = seq(min(datos_Edad_N, datos_Edad_B, datos_Edad_O), 
+                 max(datos_Edad_N, datos_Edad_B, datos_Edad_O), length.out = 100)
+  )
+```
+
+```{r}
+(g4<- ggplot(df, aes(x = Edad, color = "Raza")) +
+      stat_function(fun = ecdf_EdadN, aes(color = "Negra")) +
+      stat_function(fun = ecdf_EdadB, aes(color = "Blanca")) +
+      stat_function(fun = ecdf_EdadO, aes(color = "Otras")) +
+      scale_color_manual(values = c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")) +
+      labs(y= "F(x)",color = "Raza") +
+      theme_minimal() +
+      guides(color = guide_legend(title = "Raza")) +
+      theme(legend.position = "right"))
+```
+
+#### Tamaño del tumor
+
+```{r}
+ ecdf_TumorN <- ecdf(datos_Tumor_N)
+  ecdf_TumorB <- ecdf(datos_Tumor_B)
+  ecdf_TumorO <- ecdf(datos_Tumor_O)
+  df2<- data.frame(
+      Tamaño = seq(min(datos_Tumor_N, datos_Tumor_B, datos_Tumor_O), 
+                 max(datos_Tumor_N, datos_Tumor_B, datos_Tumor_O), length.out = 100)
+  )
+```
+
+```{r}
+(g5<- ggplot(df2, aes(x = Tamaño, color = "Raza")) +
+      stat_function(fun = ecdf_TumorN, aes(color = "Negra")) +
+      stat_function(fun = ecdf_TumorB, aes(color = "Blanca")) +
+      stat_function(fun = ecdf_TumorO, aes(color = "Otras")) +
+     scale_color_manual(values = c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")) +
+      labs(x="Tamaño (mm)",y= "F(x)",color = "Raza") +
+      theme_minimal() +
+      guides(color = guide_legend(title = "Raza")) +
+      theme(legend.position = "right"))
+```
+
+#### Grado del Tumor
+
+```{r}
+ ecdf_GradoN <- ecdf(datos_Grado_N)
+  ecdf_GradoB <- ecdf(datos_Grado_B)
+  ecdf_GradoO <- ecdf(datos_Grado_O)
+  df3<- data.frame(
+      Grado = seq(min(datos_Grado_N, datos_Grado_B, datos_Grado_O), 
+                 max(datos_Grado_N, datos_Grado_B, datos_Grado_O), length.out = 100)
+  )
+```
+
+```{r}
+(g6<- ggplot(df3, aes(x = Grado, color = "Raza")) +
+      stat_function(fun = ecdf_GradoN, aes(color = "Negra")) +
+      stat_function(fun = ecdf_GradoB, aes(color = "Blanca")) +
+      stat_function(fun = ecdf_GradoO, aes(color = "Otras")) +
+      scale_color_manual(values = c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")) +
+      labs(y= "F(x)",color = "Raza") +
+      theme_minimal() +
+      guides(color = guide_legend(title = "Raza")) +
+      theme(legend.position = "right"))
+```
+
+#### Estado
+
+```{r}
+ecdf_EstadoN <- ecdf(datos_Estado_N)
+  ecdf_EstadoB <- ecdf(datos_Estado_B)
+  ecdf_EstadoO <- ecdf(datos_Estado_O)
+  df4<- data.frame(
+      Estado = seq(0,1, length.out = 100)
+  )
+```
+
+```{r}
+(g7<- ggplot(df4, aes(x = Estado, color = "Raza")) +
+      stat_function(fun = ecdf_EstadoN, aes(color = "Negra")) +
+      stat_function(fun = ecdf_EstadoB, aes(color = "Blanca")) +
+      stat_function(fun = ecdf_EstadoO, aes(color = "Otras")) +
+      scale_color_manual(values = c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")) +
+      labs(y= "F(x)",color = "Raza") +
+      theme_minimal() +
+      guides(color = guide_legend(title = "Raza")) +
+      theme(legend.position = "right"))
+
+```
+
+#### Meses de Sobrevivencia
+
+```{r}
+ecdf_MesesN <- ecdf(datos_meses_N)
+  ecdf_MesesB <- ecdf(datos_meses_B)
+  ecdf_MesesO <- ecdf(datos_meses_O)
+  df4<- data.frame(
+      Meses = seq(min(datos_meses_N, datos_meses_B, datos_meses_O), 
+                 max(datos_meses_N, datos_meses_B, datos_meses_O), length.out = 100)
+  )
+```
+
+```{r}
+(g8<- ggplot(df4, aes(x = Meses, color = "Raza")) +
+      stat_function(fun = ecdf_MesesN, aes(color = "Negra")) +
+      stat_function(fun = ecdf_MesesB, aes(color = "Blanca")) +
+      stat_function(fun = ecdf_MesesO, aes(color = "Otras")) +
+      scale_color_manual(values = c("Negra" = "#53868B", "Otras" = "#A2CD5A", "Blanca" = "#CD5B45")) +
+      labs(y= "F(x)",color = "Raza") +
+      theme_minimal() +
+      guides(color = guide_legend(title = "Raza")) +
+      theme(legend.position = "right"))
+```
+
+Evaluar la relación entre la raza y cada uno de los factores cada en mujeres con cáncer de mama en Estados Unidos durante el período de 2006 a 2010.
+
+\item
+
+Determinar si la raza ejerce influencia en los factores pronósticos: edad de diagnóstico, tamaño y grado del tumor, meses de sobrevivencia y estado de mujeres diagnosticadas con cáncer de mama en Estados Unidos. \\end{itemize}
+
+```{r}
+panel_graficos <- grid.arrange(g4, g5, g6, g7, g8,ncol=2)
+
+ruta_descargas <- file.path(Sys.getenv("HOME"), "Downloads", "distribucion.pdf")
+
+ggsave(filename = ruta_descargas, plot = panel_graficos, width = 8, height = 6)
+
+```
+
+Posteriormente, se llevaron a cabo dos pruebas de independencia: la prueba de Chi Cuadrado y la prueba de Fisher, aplicadas a cada uno de los factores pronósticos. Estas pruebas fueron diseñadas para abordar dos objetivos específicos de la investigación: evaluar la relación entre la raza y cada uno de los factores en mujeres diagnosticadas con cáncer de mama en Estados Unidos durante el período de 2006 a 2010, y determinar si la raza influye en los factores pronósticos, tales como la edad de diagnóstico, tamaño y grado del tumor, meses de sobrevivencia y el estado de las mujeres afectadas.
+
+A continuación, se presentan los resultados obtenidos de la prueba de Chi Cuadrado.
+
+## Prueba Chi Cuadrado
+
+#### Edad de diagnóstico
+
+```{r}
+(resultado_chi_Edad<-chisq.test(datos_edad))
+```
+
+#### Tamaño del tumor
+
+```{r}
+(resultado_chi_Tumor<-chisq.test(datos_tumor))
+```
+
+#### Grado del Tumor
+
+```{r}
+(resultado_chi_Grado<-chisq.test(datos_grado))
+```
+
+Se debe tener en cuenta que esta prueba podría estar propensa a errores, ya que asume que las frecuencias esperadas en cada celda son lo suficientemente grandes. En situaciones donde se presentan frecuencias muy pequeñas en las celdas, la aproximación de esta prueba podría no ser válida, lo que podría afectar la confiabilidad de los resultados obtenidos. En este escenario particular, se observa una limitación debido a la escasez de datos en la categoría de grado IV. Para abordar esta limitación, se considera esencial incorporar otra prueba estadística, como la prueba exacta de Fisher, con el objetivo de obtener conclusiones más robustas para este factor.
+
+#### Estado
+
+```{r}
+(resultado_chi_Estado<-chisq.test(datos_estado))
+```
+
+#### Meses de sobrevivencia
+
+```{r}
+(resultado_chi_Meses<-chisq.test(datos_meses))
+```
+
+En este caso, se observa una limitación de datos significativa en la categoría de "menos de un año", lo que conlleva al mismo error mencionado anteriormente.
+
+Finalmente, se exponen los resultados de la prueba de Fisher, proporcionando así un complemento a los hallazgos obtenidos en la prueba anterior.
+
+## Prueba de Fisher
+
+#### Edad de diagnóstico
+
+```{r}
+(resultado_fisher_Edad<-fisher.test(datos_edad, simulate.p.value = TRUE))
+```
+
+#### Tamaño del Tumor
+
+```{r}
+(resultado_fisher_Tumor<-fisher.test(datos_tumor, simulate.p.value = TRUE))
+```
+
+#### Grado del Tumor
+
+```{r}
+(resultado_fisher_Grado<-fisher.test(datos_grado, simulate.p.value = TRUE))
+```
+
+#### Estado
+
+```{r}
+(resultado_fisher_Estado<-fisher.test(datos_estado, simulate.p.value = TRUE))
+```
+
+#### Meses de Sobrevivencia
+
+```{r}
+(resultado_fisher_Meses<-fisher.test(datos_meses, simulate.p.value = TRUE))
+```
