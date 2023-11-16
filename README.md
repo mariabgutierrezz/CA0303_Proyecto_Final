@@ -1,3 +1,5 @@
 # Proyecto Final del curso de Estadística Actuarial I, UCR
-## Tema: 
+## Tema:  Influencia de la raza en los factores pronósticos de mujeres diagnosticadas con cáncer de mama en Estados Unidos (2006-2010)
 #### Autores: Esaú Ramírez, Ingrid Fonseca, María José Bolaños y Sofía Sequeira.
+
+ El código realiza un análisis estadístico exhaustivo de factores pronósticos en mujeres diagnosticadas con cáncer de mama en Estados Unidos entre 2006 y 2010,  utilizando la base de datos del SEER (2017) disponible en Kaggle. En este proceso, se lleva a cabo una categorización exhaustiva de las variables clave, como la edad al momento del diagnóstico y la duración de la supervivencia en meses. Durante este proceso, se realiza una detallada categorización de variables clave, como la edad al momento del diagnóstico y la duración de la supervivencia en meses. Para evaluar la relación entre la raza y los factores pronósticos, se aplican pruebas de hipótesis como Chi Cuadrado, Fisher y la Prueba de Kolmogorov-Smirnov (KS). Además, se complementa el análisis con la generación de gráficos y tablas que presentan de manera visual los resultados obtenidos, facilitando la comprensión de la posible influencia de la variable racial en aspectos fundamentales, como el tamaño y grado del tumor.
