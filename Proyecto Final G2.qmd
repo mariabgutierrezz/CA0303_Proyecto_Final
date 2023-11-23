@@ -215,10 +215,8 @@ datos_meses <- datos %>%
   count() %>%
   spread(key = grupo_meses, value = n, fill = 0)
 
-# Modificación para hacer que "Raza" sea el índice
-datos_meses <- datos_meses %>%
-  column_to_rownames(var = "Raza")
-view(datos_meses)
+(datos_meses <- datos_meses %>%
+  column_to_rownames(var = "Raza"))
 
 ```
 
@@ -252,7 +250,7 @@ Primeramente, se calcularon los estadísticos de la variable, considerando tanto
 Para complementar el análisis, se presenta un gráfico de barras que muestra el promedio de meses de sobrevivencia, desglosado por grado y raza.
 
 ```{r}
-(g3<- ggplot(datos, aes(x = Cod_grado, y = Meses_Sobrevivencia, fill = Raza)) +
+(g3<- ggplot(datos, aes(x = Grado, y = Meses_Sobrevivencia, fill = Raza)) +
     geom_bar(stat = "summary", fun = "mean", position = "dodge") +
     labs(x = "Grado",
          y = "Meses de Sobrevivencia") +
@@ -291,7 +289,7 @@ Cabe destacar que las otras razas no tienen observaciones de grado 4.
 Y por último, se presenta un gráfico que ilustra la distribución de la variable en función de la edad de diagnóstico y la raza.
 
 ```{r}
-(g2 <- ggplot(datos, aes(x = factor(Cod_grado), y = Edad, color = Raza)) +
+(g2 <- ggplot(datos, aes(x = factor(Grado), y = Edad, color = Raza)) +
     geom_point() +
     labs(
         x = "Grado",
@@ -350,7 +348,7 @@ A continuación, se presentan los resultados obtenidos de la prueba de Kolmogoro
 (pruebaKS_EdadBO<-ks.test(datos_Edad_O, datos_Edad_B))
 ```
 
-#### Estado 
+#### Estado
 
 ```{r}
 (pruebaKS_EstadoBN<- ks.test(datos_Estado_N,datos_Estado_B))
@@ -516,10 +514,6 @@ Determinar si la raza ejerce influencia en los factores pronósticos: edad de di
 
 ```{r}
 panel_graficos <- grid.arrange(g4, g5, g6, g7, g8,ncol=2)
-
-ruta_descargas <- file.path(Sys.getenv("HOME"), "Downloads", "distribucion.pdf")
-
-ggsave(filename = ruta_descargas, plot = panel_graficos, width = 8, height = 6)
 
 ```
 
